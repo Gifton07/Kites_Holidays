@@ -1,5 +1,5 @@
 require("dotenv").config()
-const { execSync } = require("child_process")
+const { exec } = require("child_process")
 const fs = require("fs")
 const path = require("path")
 
@@ -14,13 +14,14 @@ if (fs.existsSync(cachePath)) {
 }
 
 if (!hasChrome) {
-  console.log("Chrome binary not found in cache. Downloading Chrome for Puppeteer...")
-  try {
-    execSync("npx puppeteer browsers install chrome", { stdio: "inherit" })
-    console.log("Chrome downloaded successfully!")
-  } catch (err) {
-    console.error("Failed to download Chrome during startup:", err.message)
-  }
+  console.log("Chrome binary not found in cache. Downloading Chrome for Puppeteer in the background...")
+  exec("npx puppeteer browsers install chrome", (err, stdout, stderr) => {
+    if (err) {
+      console.error("Failed to download Chrome in background:", err.message)
+    } else {
+      console.log("Chrome downloaded successfully in background!")
+    }
+  })
 }
 
 const app = require("./app")
