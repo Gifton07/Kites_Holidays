@@ -46,6 +46,8 @@ const agreementSchema = new Schema(
     // ── Generated ─────────────────────────────────────────
     /** Public MEGA download link for the generated PDF */
     pdfUrl: { type: String },
+    /** PDF Binary Buffer stored directly in database */
+    pdfBuffer: { type: Buffer },
   },
   { timestamps: true }
 )

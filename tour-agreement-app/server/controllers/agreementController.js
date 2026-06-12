@@ -58,35 +58,51 @@ const sendPdfBuffer = (res, buffer, agreement) => {
   res.send(buffer)
 }
 
-// GET /api/agreements/track/:trackingId/pdf — public (proxy MEGA → browser download)
+// GET /api/agreements/track/:trackingId/pdf — public (proxy MEGA/DB → browser download)
 exports.downloadAgreementPdfPublic = asyncHandler(async (req, res, next) => {
   const { trackingId } = req.params
   const agreement = await Agreement.findOne({ trackingId })
-  if (!agreement || agreement.status !== "approved" || !agreement.pdfUrl) {
+  if (!agreement || agreement.status !== "approved") {
     return next(new ApiError(404, "PDF not available"))
   }
-  try {
-    const buffer = await downloadBufferFromMegaUrl(agreement.pdfUrl)
-    sendPdfBuffer(res, buffer, agreement)
-  } catch (err) {
-    console.error("downloadAgreementPdfPublic:", err.message)
-    return next(new ApiError(502, "Could not retrieve PDF from storage"))
+  // Try local database buffer first
+  if (agreement.pdfBuffer) {
+    return sendPdfBuffer(res, agreement.pdfBuffer, agreement)
   }
+  // Fallback to MEGA share link for older agreements
+  if (agreement.pdfUrl && agreement.pdfUrl.startsWith("http")) {
+    try {
+      const buffer = await downloadBufferFromMegaUrl(agreement.pdfUrl)
+      return sendPdfBuffer(res, buffer, agreement)
+    } catch (err) {
+      console.error("downloadAgreementPdfPublic:", err.message)
+      return next(new ApiError(502, "Could not retrieve PDF from storage"))
+    }
+  }
+  return next(new ApiError(404, "PDF not available"))
 })
 
 // GET /api/agreements/:id/pdf-file — admin (same file, JWT required)
 exports.downloadAgreementPdfAdmin = asyncHandler(async (req, res, next) => {
   const agreement = await Agreement.findById(req.params.id)
-  if (!agreement || agreement.status !== "approved" || !agreement.pdfUrl) {
+  if (!agreement || agreement.status !== "approved") {
     return next(new ApiError(404, "PDF not available"))
   }
-  try {
-    const buffer = await downloadBufferFromMegaUrl(agreement.pdfUrl)
-    sendPdfBuffer(res, buffer, agreement)
-  } catch (err) {
-    console.error("downloadAgreementPdfAdmin:", err.message)
-    return next(new ApiError(502, "Could not retrieve PDF from storage"))
+  // Try local database buffer first
+  if (agreement.pdfBuffer) {
+    return sendPdfBuffer(res, agreement.pdfBuffer, agreement)
   }
+  // Fallback to MEGA share link for older agreements
+  if (agreement.pdfUrl && agreement.pdfUrl.startsWith("http")) {
+    try {
+      const buffer = await downloadBufferFromMegaUrl(agreement.pdfUrl)
+      return sendPdfBuffer(res, buffer, agreement)
+    } catch (err) {
+      console.error("downloadAgreementPdfAdmin:", err.message)
+      return next(new ApiError(502, "Could not retrieve PDF from storage"))
+    }
+  }
+  return next(new ApiError(404, "PDF not available"))
 })
 
 // GET /api/agreements — admin
@@ -142,7 +158,7 @@ exports.patchAgreementFinances = asyncHandler(async (req, res, next) => {
 })
 
 // PATCH /api/agreements/:id/approve — admin
-// Flow: save approval fields + manager signature → generate PDF → upload to MEGA → persist pdfUrl
+// Flow: save approval fields + manager signature → generate PDF → store in MongoDB → upload to MEGA (optional)
 exports.approveAgreement = asyncHandler(async (req, res, next) => {
   const existing = await Agreement.findById(req.params.id)
   if (!existing) return res.status(404).json({ success: false, message: "Not found" })
@@ -167,35 +183,46 @@ exports.approveAgreement = asyncHandler(async (req, res, next) => {
   )
   if (!agreement) return res.status(404).json({ success: false, message: "Not found" })
 
-  let pdfError = null
   try {
+    // 1. Generate PDF
     const pdfBuffer = await generatePDF(agreement.toObject())
-    const filename = `agreement-${agreement.trackingId}.pdf`
-    const pdfUrl = await uploadToMega(pdfBuffer, filename)
-    agreement.pdfUrl = pdfUrl
+    agreement.pdfBuffer = pdfBuffer
+    // Set a default download link pointing to our Express server
+    agreement.pdfUrl = `/api/agreements/track/${agreement.trackingId}/pdf`
+
+    // 2. Try optional MEGA upload (do not fail if MEGA has credentials/network errors)
+    try {
+      const filename = `agreement-${agreement.trackingId}.pdf`
+      const megaUrl = await uploadToMega(pdfBuffer, filename)
+      if (megaUrl) {
+        agreement.pdfUrl = megaUrl
+      }
+    } catch (megaErr) {
+      console.warn("Optional MEGA upload failed, using local MongoDB buffer:", megaErr.message)
+    }
+
     await agreement.save()
 
+    // 3. Send email linking to the status track page containing the download button
     if (agreement.email) {
+      const statusUrl = `https://kites-holidays.vercel.app/status/${agreement.trackingId}`
       await sendApprovalEmail({
         to: agreement.email,
         name: agreement.name,
         trackingId: agreement.trackingId,
-        downloadUrl: pdfUrl,
+        downloadUrl: statusUrl,
         destination: agreement.destination,
         startDate: agreement.startDate,
       }).catch(console.error)
     }
   } catch (err) {
-    pdfError = err.message || String(err)
-    console.error("PDF/Upload/Email error:", pdfError, err.stack)
-    // Agreement stays approved; pdfUrl is not set until upload succeeds
+    console.error("PDF generation or save error:", err.message, err.stack)
   }
 
   const fresh = await Agreement.findById(agreement._id)
   res.json({
     success: true,
     data: fresh,
-    ...(pdfError && { pdfError }),
   })
 })
 
@@ -221,7 +248,7 @@ exports.rejectAgreement = asyncHandler(async (req, res) => {
   res.json({ success: true, data: agreement })
 })
 
-// POST /api/agreements/:id/regenerate-pdf — admin (retry MEGA upload after fixing .env)
+// POST /api/agreements/:id/regenerate-pdf — admin (retry PDF generation + MEGA upload)
 exports.regeneratePdf = asyncHandler(async (req, res, next) => {
   const agreement = await Agreement.findById(req.params.id)
   if (!agreement) return res.status(404).json({ success: false, message: "Not found" })
@@ -230,16 +257,29 @@ exports.regeneratePdf = asyncHandler(async (req, res, next) => {
   }
   try {
     const pdfBuffer = await generatePDF(agreement.toObject())
-    const filename = `agreement-${agreement.trackingId}.pdf`
-    const pdfUrl = await uploadToMega(pdfBuffer, filename)
-    agreement.pdfUrl = pdfUrl
+    agreement.pdfBuffer = pdfBuffer
+    agreement.pdfUrl = `/api/agreements/track/${agreement.trackingId}/pdf`
+
+    // Optional MEGA upload
+    try {
+      const filename = `agreement-${agreement.trackingId}.pdf`
+      const megaUrl = await uploadToMega(pdfBuffer, filename)
+      if (megaUrl) {
+        agreement.pdfUrl = megaUrl
+      }
+    } catch (megaErr) {
+      console.warn("Optional MEGA upload failed during regeneration:", megaErr.message)
+    }
+
     await agreement.save()
+
     if (agreement.email) {
+      const statusUrl = `https://kites-holidays.vercel.app/status/${agreement.trackingId}`
       await sendApprovalEmail({
         to: agreement.email,
         name: agreement.name,
         trackingId: agreement.trackingId,
-        downloadUrl: pdfUrl,
+        downloadUrl: statusUrl,
         destination: agreement.destination,
         startDate: agreement.startDate,
       }).catch(console.error)
@@ -247,7 +287,7 @@ exports.regeneratePdf = asyncHandler(async (req, res, next) => {
     res.json({ success: true, data: agreement })
   } catch (err) {
     console.error("regeneratePdf error:", err.message, err.stack)
-    return next(new ApiError(502, err.message || "PDF or MEGA upload failed"))
+    return next(new ApiError(502, err.message || "PDF generation failed"))
   }
 })
 
