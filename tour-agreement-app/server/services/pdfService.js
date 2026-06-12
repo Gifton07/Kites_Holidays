@@ -1,17 +1,19 @@
 const fs = require("fs")
+
+// Clean up configured executable path if the file does not exist on this machine
+// This MUST run before requiring puppeteer because puppeteer caches process.env on load
+if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+  if (!fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+    console.warn(`Ignoring PUPPETEER_EXECUTABLE_PATH because file not found: ${process.env.PUPPETEER_EXECUTABLE_PATH}`)
+    delete process.env.PUPPETEER_EXECUTABLE_PATH
+  }
+}
+
 const puppeteer = require("puppeteer")
 const agreementTemplate = require("../templates/agreementTemplate")
 
 const generatePDF = async (agreementData) => {
   const html = agreementTemplate(agreementData)
-
-  // Clean up configured executable path if the file does not exist on this machine
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    if (!fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
-      console.warn(`Ignoring PUPPETEER_EXECUTABLE_PATH because file not found: ${process.env.PUPPETEER_EXECUTABLE_PATH}`)
-      delete process.env.PUPPETEER_EXECUTABLE_PATH
-    }
-  }
 
   const browser = await puppeteer.launch({
     headless: "new",
