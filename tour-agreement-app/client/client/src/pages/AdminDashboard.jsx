@@ -34,7 +34,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="flex min-h-screen page-shell">
+    <div className="flex flex-col md:flex-row min-h-screen page-shell">
       <Sidebar />
       <main className="flex-1 p-6 overflow-auto">
         <h1 className="theme-page-title mb-6 bg-gradient-to-r from-emerald-800 via-teal-700 to-indigo-700 bg-clip-text text-2xl font-extrabold text-transparent">

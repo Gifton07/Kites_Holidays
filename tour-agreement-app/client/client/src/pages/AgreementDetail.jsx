@@ -78,7 +78,7 @@ export default function AgreementDetail() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen page-shell">
+      <div className="flex flex-col md:flex-row min-h-screen page-shell">
         <Sidebar />
         <main className="flex flex-1 items-center justify-center p-8">
           <div className="font-display animate-pulse text-2xl text-emerald-800/45">Loading…</div>
@@ -88,7 +88,7 @@ export default function AgreementDetail() {
   }
   if (!data) {
     return (
-      <div className="flex min-h-screen page-shell">
+      <div className="flex flex-col md:flex-row min-h-screen page-shell">
         <Sidebar />
         <main className="flex-1 p-8">
           <p className="theme-page-sub">Not found</p>
@@ -98,7 +98,7 @@ export default function AgreementDetail() {
   }
 
   return (
-    <div className="flex min-h-screen page-shell">
+    <div className="flex flex-col md:flex-row min-h-screen page-shell">
       <Sidebar />
       <main className="flex-1 overflow-auto p-6">
         <div className="mb-6 flex flex-wrap items-center gap-4">

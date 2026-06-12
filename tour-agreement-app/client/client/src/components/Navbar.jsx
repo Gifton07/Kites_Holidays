@@ -63,20 +63,20 @@ export default function Navbar({ overlay = false }) {
             <div className="flex items-center gap-2 sm:gap-4">
               <Link
                 to="/"
-                className="text-sm font-medium text-emerald-200/90 transition-colors hover:text-white"
+                className="text-xs sm:text-sm font-medium text-emerald-200/90 transition-colors hover:text-white"
               >
                 Home
               </Link>
               <Link
                 to="/track"
-                className="text-sm font-medium text-emerald-200/90 transition-colors hover:text-white"
+                className="text-xs sm:text-sm font-medium text-emerald-200/90 transition-colors hover:text-white"
               >
                 Track
               </Link>
               <Link to="/book">
                 <button
                   type="button"
-                  className="font-display btn-primary !rounded-2xl !px-5 !py-2.5 !text-sm !font-semibold shadow-md"
+                  className="font-display btn-primary !rounded-2xl !px-3 sm:!px-5 !py-2 sm:!py-2.5 !text-xs sm:!text-sm !font-semibold shadow-md"
                 >
                   Book now
                 </button>
@@ -85,7 +85,7 @@ export default function Navbar({ overlay = false }) {
           </div>
         </div>
       </nav>
-      <div className="h-[5.5rem] w-full shrink-0" aria-hidden />
+      <div className="h-20 sm:h-[5.5rem] w-full shrink-0" aria-hidden />
     </>
   )
 }
