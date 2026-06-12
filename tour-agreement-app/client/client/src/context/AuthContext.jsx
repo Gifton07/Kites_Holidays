@@ -17,7 +17,10 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const login = async (email, password) => {
-    const res = await axios.post("http://localhost:5000/api/auth/login", { email, password })
+    const base = import.meta.env.VITE_API_URL
+      ? `${import.meta.env.VITE_API_URL.replace(/\/$/, "")}/api/auth`
+      : "http://localhost:5000/api/auth"
+    const res = await axios.post(`${base}/login`, { email, password })
     const { token } = res.data
     localStorage.setItem("adminToken", token)
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
