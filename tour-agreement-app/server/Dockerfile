@@ -3,7 +3,6 @@ FROM ghcr.io/puppeteer/puppeteer:latest
 
 # Set environment variables
 ENV PORT=5000
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 # Set the working directory inside the container
 WORKDIR /app
