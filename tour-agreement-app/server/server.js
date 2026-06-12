@@ -15,7 +15,7 @@ if (fs.existsSync(cachePath)) {
 
 if (!hasChrome) {
   console.log("Chrome binary not found in cache. Downloading Chrome for Puppeteer in the background...")
-  exec("npx puppeteer browsers install chrome@146.0.7680.153", (err, stdout, stderr) => {
+  exec(`npx puppeteer browsers install chrome@146.0.7680.153 --path "${cachePath}"`, (err, stdout, stderr) => {
     if (err) {
       console.error("Failed to download Chrome in background:", err.message)
     } else {
